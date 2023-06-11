@@ -177,6 +177,10 @@ const ExportedImage = forwardRef<HTMLImageElement | null, ExportedImageProps>(
     // check if the src is a SVG image -> then we should not use the blurDataURL and use unoptimized
     const isSVG =
       typeof src === "object" ? src.src.endsWith(".svg") : src.endsWith(".svg");
+    if (typeof width !== "number") {
+      width = parseInt(width as string);
+    }
+    const imageUrl = optimizedLoader({ src, width });
 
     const ImageElement = (
       <Image
@@ -194,7 +198,7 @@ const ExportedImage = forwardRef<HTMLImageElement | null, ExportedImageProps>(
         {...(priority && { priority })}
         {...(isSVG && { unoptimized: true })}
         style={{ ...style }}
-        loader={optimizedLoader}
+        loader={()=>imageUrl}
         onError={onError}
         onLoadingComplete={onLoadingComplete}
         src={src}
