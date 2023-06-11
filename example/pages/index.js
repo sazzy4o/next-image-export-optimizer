@@ -1,7 +1,5 @@
 import Head from "next/head";
 import ExportedImageLegacy from "../../src/legacy/ExportedImage";
-// import ExportedImageLegacy from "next-image-export-optimizer/legacy/ExportedImage";
-// import ExportedImage from "next-image-export-optimizer";
 import ExportedImage from "../../src/ExportedImage";
 
 import styles from "../styles/Home.module.css";

@@ -1,13 +1,15 @@
-export {};
-const fs = require("fs");
-const path = require("path");
+import fs from "fs";
+import path from "path";
 
-function ensureDirectoryExists(filePath: string) {
+async function ensureDirectoryExists(filePath: string) {
   const dirName = path.dirname(filePath);
   if (fs.existsSync(dirName)) {
     return true;
   }
-  ensureDirectoryExists(dirName);
-  fs.mkdirSync(dirName);
+  await ensureDirectoryExists(dirName);
+  return fs.promises.mkdir(dirName).catch((err) => {
+    if (err.code == 'EEXIST') return null;
+    throw err; 
+  });
 }
 module.exports = ensureDirectoryExists;

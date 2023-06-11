@@ -2,7 +2,7 @@ export {};
 
 const { createHash } = require("crypto");
 
-module.exports = function getHash(items: string[]) {
+module.exports = function getHash(items: string[]):string {
   const hash = createHash("sha256");
   for (let item of items) {
     if (typeof item === "number") hash.update(String(item));

@@ -1,4 +1,6 @@
-# Next-Image-Export-Optimizer
+# Next-Image-Export-Optimizer-SSG
+
+(SSG optimized fork of [next-image-export-optimizer](https://github.com/Niels-IO/next-image-export-optimizer))
 
 [![npm](https://img.shields.io/npm/v/next-image-export-optimizer)](https://www.npmjs.com/package/next-image-export-optimizer)
 
@@ -21,11 +23,11 @@ Placement of the images:
 ## Installation
 
 ```
-npm install next-image-export-optimizer
+npm install next-image-export-optimizer-ssg
 
 # Or
-yarn add next-image-export-optimizer
-pnpm install next-image-export-optimizer
+yarn add next-image-export-optimizer-ssg
+pnpm install next-image-export-optimizer-ssg
 ```
 
 Configure the library in your **Next.js** configuration file:
@@ -38,7 +40,7 @@ module.exports = {
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
   },
-  transpilePackages: ["next-image-export-optimizer"],
+  transpilePackages: ["next-image-export-optimizer-ssg"],
   env: {
     nextImageExportOptimizer_imageFolderPath: "public/images",
     nextImageExportOptimizer_exportFolderPath: "out",
@@ -95,7 +97,7 @@ module.exports = {
    // Replace with either of the following:
 
    // With static import (Recommended)
-   import ExportedImage from "next-image-export-optimizer";
+   import ExportedImage from "next-image-export-optimizer-ssg";
    import testPictureStatic from "PATH_TO_IMAGE/test_static.jpg";
 
    <ExportedImage
@@ -105,7 +107,7 @@ module.exports = {
    />;
 
    // With dynamic import
-   import ExportedImage from "next-image-export-optimizer";
+   import ExportedImage from "next-image-export-optimizer-ssg";
 
    <ExportedImage
      src="images/VERY_LARGE_IMAGE.jpg"
@@ -124,7 +126,7 @@ module.exports = {
 6. This library also supports remote images. You have to specify the src as a string starting with either http or https in the ExportedImage component.
 
    ```javascript
-   import ExportedImage from "next-image-export-optimizer";
+   import ExportedImage from "next-image-export-optimizer-ssg";
 
    <ExportedImage
      src="https://example.com/remote-image.jpg"
@@ -167,7 +169,7 @@ module.exports = {
    Example:
 
    ```javascript
-   import ExportedImage from "next-image-export-optimizer";
+   import ExportedImage from "next-image-export-optimizer-ssg";
 
    <ExportedImage
      src={testPictureStatic}
@@ -190,7 +192,7 @@ module.exports = {
 9. You can still use the legacy image component `next/legacy/image`:
 
    ```javascript
-   import ExportedImage from "next-image-export-optimizer/legacy/ExportedImage";
+   import ExportedImage from "next-image-export-optimizer-ssg/legacy/ExportedImage";
 
    import testPictureStatic from "PATH_TO_IMAGE/test_static.jpg";
 

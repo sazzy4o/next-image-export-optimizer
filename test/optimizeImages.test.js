@@ -34,7 +34,7 @@ const legacyConfig = `module.exports = {
     }
   },
   output: "export",
-  transpilePackages: ["next-image-export-optimizer"],
+  transpilePackages: ["next-image-export-optimizer-ssg"],
   env: {
     storePicturesInWEBP: true,
     generateAndUseBlurImages: true,
@@ -48,7 +48,7 @@ const newConfig = `module.exports = {
     deviceSizes: [640, 750, 777, 828, 1080, 1200, 1920, 2048, 3840],
   },
   output: "export",
-  transpilePackages: ["next-image-export-optimizer"],
+  transpilePackages: ["next-image-export-optimizer-ssg"],
   env: {
     nextImageExportOptimizer_imageFolderPath: "public/images",
     nextImageExportOptimizer_exportFolderPath: "out",
@@ -66,7 +66,7 @@ const newConfigJpeg = `module.exports = {
     deviceSizes: [640, 750, 777, 828, 1080, 1200, 1920, 2048, 3840],
   },
   output: "export",
-  transpilePackages: ["next-image-export-optimizer"],
+  transpilePackages: ["next-image-export-optimizer-ssg"],
   env: {
     nextImageExportOptimizer_imageFolderPath: "public/images",
     nextImageExportOptimizer_exportFolderPath: "out",
@@ -83,7 +83,7 @@ const newConfigExportFolderName = `module.exports = {
     deviceSizes: [640, 750, 777, 828, 1080, 1200, 1920, 2048, 3840],
   },
   output: "export",
-  transpilePackages: ["next-image-export-optimizer"],
+  transpilePackages: ["next-image-export-optimizer-ssg"],
   env: {
     nextImageExportOptimizer_imageFolderPath: "public/images",
     nextImageExportOptimizer_exportFolderPath: "out",

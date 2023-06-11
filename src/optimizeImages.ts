@@ -1,17 +1,16 @@
 #!/usr/bin/env node
 
 import { ImageObject } from "./utils/ImageObject";
+import { Pool } from "multiprocess-pool";
 
 const defineProgressBar = require("./utils/defineProgressBar");
 const downloadImagesInBatches = require("./utils/downloadImagesInBatches");
 const ensureDirectoryExists = require("./utils/ensureDirectoryExists");
 const getAllFilesAsObject = require("./utils/getAllFilesAsObject");
-const getHash = require("./utils/getHash");
 const getRemoteImageURLs = require("./utils/getRemoteImageURLs");
 
-const fs = require("fs");
-const sharp = require("sharp");
-const path = require("path");
+import fs from "fs";
+import path from "path";
 
 const loadConfig = require("next/dist/server/config").default;
 
@@ -25,7 +24,7 @@ if (process.argv.length === 3) {
   // Colorize the output to red
   console.error("\x1b[31m");
   console.error(
-    "next-image-export-optimizer: Breaking change: Please provide the path to the next.config.js file as an argument with the name --nextConfigPath."
+    "next-image-export-optimizer-ssg: Breaking change: Please provide the path to the next.config.js file as an argument with the name --nextConfigPath."
   );
   // Reset the color
   console.error("\x1b[0m");
@@ -149,15 +148,15 @@ const nextImageExportOptimizer = async function () {
     if (newPath.nextImageExportOptimizer_exportFolderName !== undefined) {
       exportFolderName = newPath.nextImageExportOptimizer_exportFolderName;
     }
-    // Give the user a warning if the transpilePackages: ["next-image-export-optimizer"], is not set in the next.config.js
+    // Give the user a warning if the transpilePackages: ["next-image-export-optimizer-ssg"], is not set in the next.config.js
     if (
       nextjsConfig.transpilePackages === undefined || // transpilePackages is not set
       (nextjsConfig.transpilePackages !== undefined &&
-        !nextjsConfig.transpilePackages.includes("next-image-export-optimizer")) // transpilePackages is set but does not include next-image-export-optimizer
+        !nextjsConfig.transpilePackages.includes("next-image-export-optimizer-ssg")) // transpilePackages is set but does not include next-image-export-optimizer
     ) {
       console.warn(
         "\x1b[41m",
-        `Changed in 1.2.0: You have not set transpilePackages: ["next-image-export-optimizer"] in your next.config.js. This may cause problems with next-image-export-optimizer. Please add this line to your next.config.js.`,
+        `Changed in 1.2.0: You have not set transpilePackages: ["next-image-export-optimizer-ssg"] in your next.config.js. This may cause problems with next-image-export-optimizer. Please add this line to your next.config.js.`,
         "\x1b[0m"
       );
     }
@@ -231,7 +230,7 @@ const nextImageExportOptimizer = async function () {
   } = {};
   const hashFilePath = `${imageFolderPath}/next-image-export-optimizer-hashes.json`;
   try {
-    let rawData = fs.readFileSync(hashFilePath);
+    let rawData = fs.readFileSync(hashFilePath).toString();
     imageHashes = JSON.parse(rawData);
   } catch (e) {
     // No image hashes yet
@@ -244,7 +243,7 @@ const nextImageExportOptimizer = async function () {
   const isImageFolderSubdirectoryOfPublicFolder =
     imageFolderPath.includes("public");
 
-  const allFilesInImageFolderAndSubdirectories =
+  const allFilesInImageFolderAndSubdirectories:ImageObject[] =
     isImageFolderSubdirectoryOfPublicFolder
       ? getAllFilesAsObject(imageFolderPath, imageFolderPath, exportFolderName)
       : [];
@@ -282,7 +281,7 @@ const nextImageExportOptimizer = async function () {
     allFilesInImageFolderAndSubdirectories.push(...remoteImageFiles);
   }
 
-  const allImagesInImageFolder = allFilesInImageFolderAndSubdirectories.filter(
+  const allImagesInImageFolder:ImageObject[] = allFilesInImageFolderAndSubdirectories.filter(
     (fileObject: ImageObject) => {
       if (fileObject === undefined) return false;
       if (fileObject.file === undefined) return false;
@@ -325,205 +324,52 @@ const nextImageExportOptimizer = async function () {
     [key: string]: string;
   } = {};
 
-  // Loop through all images
-  for (let index = 0; index < allImagesInImageFolder.length; index++) {
-    // try catch to catch errors in the loop and let the user know which image caused the error
-    try {
-      const file = allImagesInImageFolder[index].file;
-      let fileDirectory = allImagesInImageFolder[index].dirPathWithoutBasePath;
-      let basePath = allImagesInImageFolder[index].basePath;
+  const optimizeSingleImageInputs = allImagesInImageFolder.map((imageData: ImageObject) => {
+    return {
+      imageData,
+      widths,
+      quality,
+      storePicturesInWEBP,
+      staticImageFolderPath,
+      exportFolderName,
+      imageHashes,
+      nextConfigFolder,
+      folderNameForRemoteImages,
+    };
+  });
 
-      let extension = file.split(".").pop()!.toUpperCase();
-      const imageBuffer = fs.readFileSync(
-        path.join(basePath, fileDirectory, file)
-      );
-      const imageHash = getHash([
-        imageBuffer,
-        ...widths,
-        quality,
-        fileDirectory,
-        file,
-      ]);
-      const keyForImageHashes = `${fileDirectory}/${file}`;
+  const pool = new Pool();
+  const optimizationResults = await pool.map(optimizeSingleImageInputs, __dirname + '/optimizeSingleImage');
+  optimizationResults.forEach((optimizationResult) => {
+    const {
+      localGeneratedImages,
+      localSizeOfGeneratedImages,
+      localUpdatedImageHashes
+    } = optimizationResult;
+    allGeneratedImages.push(...localGeneratedImages);
+    sizeOfGeneratedImages += localSizeOfGeneratedImages;
+    Object.assign(updatedImageHashes, localUpdatedImageHashes);
+  });
+  pool.close();
 
-      let hashContentChanged = false;
-      if (imageHashes[keyForImageHashes] !== imageHash) {
-        hashContentChanged = true;
-      }
-      // Store image hash in temporary object
-      updatedImageHashes[keyForImageHashes] = imageHash;
-
-      let optimizedOriginalWidthImagePath;
-      let optimizedOriginalWidthImageSizeInMegabytes;
-
-      // Loop through all widths
-      for (let indexWidth = 0; indexWidth < widths.length; indexWidth++) {
-        const width = widths[indexWidth];
-
-        const filename = path.parse(file).name;
-        if (storePicturesInWEBP) {
-          extension = "WEBP";
-        }
-
-        const isStaticImage = basePath === staticImageFolderPath;
-        // for a static image, we copy the image to public/nextImageExportOptimizer or public/${exportFolderName}
-        // and not the staticImageFolderPath
-        // as the static image folder is deleted before each build
-        const basePathToStoreOptimizedImages =
-          isStaticImage ||
-          basePath === path.join(nextConfigFolder, folderNameForRemoteImages)
-            ? "public"
-            : basePath;
-        const optimizedFileNameAndPath = path.join(
-          basePathToStoreOptimizedImages,
-          fileDirectory,
-          exportFolderName,
-          `${filename}-opt-${width}.${extension.toUpperCase()}`
-        );
-
-        // Check if file is already in hash and specific size and quality is present in the
-        // opt file directory
-        if (
-          !hashContentChanged &&
-          keyForImageHashes in imageHashes &&
-          fs.existsSync(optimizedFileNameAndPath)
-        ) {
-          const stats = fs.statSync(optimizedFileNameAndPath);
-          const fileSizeInBytes = stats.size;
-          const fileSizeInMegabytes = fileSizeInBytes / (1024 * 1024);
-          sizeOfGeneratedImages += fileSizeInMegabytes;
-          progressBar.increment({
-            sizeOfGeneratedImages: sizeOfGeneratedImages.toFixed(1),
-          });
-          allGeneratedImages.push(optimizedFileNameAndPath);
-
-          continue;
-        }
-
-        const transformer = sharp(imageBuffer, {
-          animated: true,
-          limitInputPixels: false, // disable pixel limit
-        });
-
-        transformer.rotate();
-
-        const { width: metaWidth } = await transformer.metadata();
-
-        // For a static image, we can skip the image optimization and the copying
-        // of the image for images with a width greater than the original image width
-        // we will stop the loop at the first image with a width greater than the original image width
-        let nextLargestSize = -1;
-        for (let i = 0; i < widths.length; i++) {
-          if (
-            Number(widths[i]) >= metaWidth &&
-            (nextLargestSize === -1 || Number(widths[i]) < nextLargestSize)
-          ) {
-            nextLargestSize = Number(widths[i]);
-          }
-        }
-        if (
-          isStaticImage &&
-          nextLargestSize !== -1 &&
-          width > nextLargestSize
-        ) {
-          progressBar.increment({
-            sizeOfGeneratedImages: sizeOfGeneratedImages.toFixed(1),
-          });
-          continue;
-        }
-
-        // If the original image's width is X, the optimized images are
-        // identical for all widths >= X. Once we have generated the first of
-        // these identical images, we can simply copy that file instead of redoing
-        // the optimization.
-        if (
-          optimizedOriginalWidthImagePath &&
-          optimizedOriginalWidthImageSizeInMegabytes
-        ) {
-          fs.copyFileSync(
-            optimizedOriginalWidthImagePath,
-            optimizedFileNameAndPath
-          );
-
-          sizeOfGeneratedImages += optimizedOriginalWidthImageSizeInMegabytes;
-          progressBar.increment({
-            sizeOfGeneratedImages: sizeOfGeneratedImages.toFixed(1),
-          });
-          allGeneratedImages.push(optimizedFileNameAndPath);
-
-          continue;
-        }
-
-        const resize = metaWidth && metaWidth > width;
-        if (resize) {
-          transformer.resize(width);
-        }
-
-        if (extension === "AVIF") {
-          if (transformer.avif) {
-            const avifQuality = quality - 15;
-            transformer.avif({
-              quality: Math.max(avifQuality, 0),
-              chromaSubsampling: "4:2:0", // same as webp
-            });
-          } else {
-            transformer.webp({ quality });
-          }
-        } else if (extension === "WEBP" || storePicturesInWEBP) {
-          transformer.webp({ quality });
-        } else if (extension === "PNG") {
-          transformer.png({ quality });
-        } else if (extension === "JPEG" || extension === "JPG") {
-          transformer.jpeg({ quality });
-        } else if (extension === "GIF") {
-          transformer.gif({ quality });
-        }
-
-        // Write the optimized image to the file system
-        ensureDirectoryExists(optimizedFileNameAndPath);
-        const info = await transformer.toFile(optimizedFileNameAndPath);
-        const fileSizeInBytes = info.size;
-        const fileSizeInMegabytes = fileSizeInBytes / (1024 * 1024);
-        sizeOfGeneratedImages += fileSizeInMegabytes;
-        progressBar.increment({
-          sizeOfGeneratedImages: sizeOfGeneratedImages.toFixed(1),
-        });
-        allGeneratedImages.push(optimizedFileNameAndPath);
-
-        if (!resize) {
-          optimizedOriginalWidthImagePath = optimizedFileNameAndPath;
-          optimizedOriginalWidthImageSizeInMegabytes = fileSizeInMegabytes;
-        }
-      }
-    } catch (error) {
-      console.log(
-        `
-      Error while optimizing image ${allImagesInImageFolder[index].file}
-      ${error}
-      `
-      );
-      // throw the error so that the process stops
-      throw error;
-    }
-  }
   let data = JSON.stringify(updatedImageHashes, null, 4);
-  ensureDirectoryExists(hashFilePath);
+  await ensureDirectoryExists(hashFilePath);
   fs.writeFileSync(hashFilePath, data);
 
   // Copy the optimized images to the build folder
 
   console.log("Copy optimized images to build folder...");
-  for (let index = 0; index < allGeneratedImages.length; index++) {
-    const filePath = allGeneratedImages[index];
-    const fileInBuildFolder = path.join(
+  await Promise.all(allGeneratedImages.map(async (imagePath: string) => {
+    const filePath = path.resolve(imagePath);
+    const fileInBuildFolder = path.resolve(path.join(
       exportFolderPath,
-      filePath.split("public").pop()
-    );
+      filePath.split("public").pop() as string
+    ));
 
     // Create the folder for the optimized images in the build directory if it does not exists
-    ensureDirectoryExists(fileInBuildFolder);
-    fs.copyFileSync(filePath, fileInBuildFolder);
-  }
+    await ensureDirectoryExists(fileInBuildFolder);
+    await fs.promises.copyFile(filePath, fileInBuildFolder);
+  }));
 
   function findSubfolders(
     rootPath: string,
