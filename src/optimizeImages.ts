@@ -450,7 +450,8 @@ const nextImageExportOptimizer = async function () {
       } from the optimized images folders.`
     );
 
-  console.log("---- next-image-export-optimizer: Done ---- ");
+  console.log("---- next-image-export-optimizer-ssg: Done ---- ");
+  process.exit(0);
 };
 
 if (require.main === module) {
