@@ -1,4 +1,6 @@
-import React, { forwardRef } from 'react';
+"use client";
+
+import React, { forwardRef, useMemo, useState } from "react";
 import Image, { ImageProps, StaticImageData } from "next/image";
 
 const splitFilePath = ({ filePath }: { filePath: string }) => {
@@ -111,9 +113,6 @@ const optimizedLoader = ({
   const isStaticImage = typeof src === "object";
   const _src = isStaticImage ? src.src : src;
   const originalImageWidth = (isStaticImage && src.width) || undefined;
-  if (!originalImageWidth){
-    console.warn(`warn  - The image ${_src} is not static. This will cause extra computation and a larger bundle size. Consider using a static image instead.`)
-  }
 
   // if it is a static image, we can use the width of the original image to generate a reduced srcset that returns
   // the same image url for widths that are larger than the original image
@@ -150,6 +149,18 @@ const optimizedLoader = ({
   return generateImageURL(_src, width);
 };
 
+const fallbackLoader = ({ src }: { src: string | StaticImageData }) => {
+  let _src = typeof src === "object" ? src.src : src;
+
+  const isRemoteImage = _src.startsWith("http");
+
+  // if the _src does not start with a slash, then we add one as long as it is not a remote image
+  if (!isRemoteImage && _src.charAt(0) !== "/") {
+    _src = "/" + _src;
+  }
+  return _src;
+};
+
 export interface ExportedImageProps
   extends Omit<ImageProps, "src" | "loader" | "quality"> {
   src: string | StaticImageData;
@@ -174,13 +185,49 @@ const ExportedImage = forwardRef<HTMLImageElement | null, ExportedImageProps>(
     },
     ref
   ) => {
+    const [imageError, setImageError] = useState(false);
+    const automaticallyCalculatedBlurDataURL = useMemo(() => {
+      if (blurDataURL) {
+        // use the user provided blurDataURL if present
+        return blurDataURL;
+      }
+      // check if the src is specified as a local file -> then it is an object
+      const isStaticImage = typeof src === "object";
+      const _src = isStaticImage ? src.src : src;
+      if (unoptimized === true) {
+        // return the src image when unoptimized
+        return _src;
+      }
+      // Check if the image is a remote image (starts with http or https)
+      if (_src.startsWith("http")) {
+        return imageURLForRemoteImage({ src: _src, width: 10 });
+      }
+      // otherwise use the generated image of 10px width as a blurDataURL
+      return generateImageURL(_src, 10);
+    }, [blurDataURL, src, unoptimized]);
+
     // check if the src is a SVG image -> then we should not use the blurDataURL and use unoptimized
     const isSVG =
       typeof src === "object" ? src.src.endsWith(".svg") : src.endsWith(".svg");
-    if (typeof width !== "number") {
-      width = parseInt(width as string);
-    }
-    const imageUrl = optimizedLoader({ src, width });
+
+    const [blurComplete, setBlurComplete] = useState(false);
+
+    // Currently, we have to handle the blurDataURL ourselves as the new Image component
+    // is expecting a base64 encoded string, but the generated blurDataURL is a normal URL
+    const blurStyle =
+      placeholder === "blur" &&
+      !isSVG &&
+      automaticallyCalculatedBlurDataURL &&
+      automaticallyCalculatedBlurDataURL.startsWith("/") &&
+      !blurComplete
+        ? {
+            backgroundSize: style?.objectFit || "cover",
+            backgroundPosition: style?.objectPosition || "50% 50%",
+            backgroundRepeat: "no-repeat",
+            backgroundImage: `url(${automaticallyCalculatedBlurDataURL})`,
+            filter: "url(#sharpBlur)",
+          }
+        : undefined;
 
     const ImageElement = (
       <Image
@@ -194,13 +241,37 @@ const ExportedImage = forwardRef<HTMLImageElement | null, ExportedImageProps>(
         // if the blurStyle is not "empty", then we take care of the blur behavior ourselves
         // if the blur is complete, we also set the placeholder to empty as it otherwise shows
         // the background image on transparent images
+        {...(placeholder && {
+          placeholder: blurStyle || blurComplete ? "empty" : placeholder,
+        })}
         {...(unoptimized && { unoptimized })}
         {...(priority && { priority })}
         {...(isSVG && { unoptimized: true })}
-        style={{ ...style }}
-        loader={()=>imageUrl}
-        onError={onError}
-        onLoadingComplete={onLoadingComplete}
+        style={{ ...style, ...blurStyle }}
+        loader={
+          imageError || unoptimized === true
+            ? fallbackLoader
+            : (e) => optimizedLoader({ src, width: e.width })
+        }
+        blurDataURL={automaticallyCalculatedBlurDataURL}
+        onError={(error) => {
+          setImageError(true);
+          setBlurComplete(true);
+          // execute the onError function if provided
+          onError && onError(error);
+        }}
+        onLoadingComplete={(result) => {
+          // for some configurations, the onError handler is not called on an error occurrence
+          // so we need to check if the image is loaded correctly
+          if (result.naturalWidth === 0) {
+            // Broken image, fall back to unoptimized (meaning the original image src)
+            setImageError(true);
+          }
+          setBlurComplete(true);
+
+          // execute the onLoadingComplete callback if present
+          onLoadingComplete && onLoadingComplete(result);
+        }}
         src={src}
       />
     );
