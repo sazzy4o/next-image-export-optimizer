@@ -1,6 +1,6 @@
 {
   "name": "next-image-export-optimizer-ssg",
-  "version": "1.0.1",
+  "version": "1.1.2",
   "description": "Optimizes all static images for Next.js SSG functionality",
   "main": "dist/ExportedImage.js",
   "types": "dist/ExportedImage.d.ts",
@@ -26,12 +26,7 @@
     }
   },
   "files": [
-    "dist/ExportedImage.js",
-    "dist/ExportedImage.d.ts",
-    "dist/legacy/ExportedImage.js",
-    "dist/legacy/ExportedImage.d.ts",
-    "dist/optimizeImages.js",
-    "dist/utils"
+    "dist/"
   ],
   "scripts": {
     "build": "rimraf dist && tsc && tsc --project tsconfig.optimizeImages.json",
@@ -43,7 +38,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Niels-IO/next-image-export-optimizer"
+    "url": "https://github.com/sazzy4o/next-image-export-optimizer-ssg"
   },
   "keywords": [
     "next.js",
